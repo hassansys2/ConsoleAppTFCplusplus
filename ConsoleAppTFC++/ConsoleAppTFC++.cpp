@@ -71,9 +71,17 @@ int main() {
         Mat segmentation_mask_resized;
         resize(segmentation_mask, segmentation_mask_resized, frame.size());
 
+        // Apply Gaussian blur to smooth the edges of the mask
+        GaussianBlur(segmentation_mask_resized, segmentation_mask_resized, Size(7, 7), 0);
+
         // Threshold mask to create binary mask
         Mat binary_mask;
         threshold(segmentation_mask_resized, binary_mask, 0.5, 1, THRESH_BINARY);
+
+        // Apply morphological operations to remove noise
+        Mat morph_kernel = getStructuringElement(MORPH_ELLIPSE, Size(5, 5));
+        dilate(binary_mask, binary_mask, morph_kernel);
+        erode(binary_mask, binary_mask, morph_kernel);
 
         // Convert mask to 3 channels and the same type as the frame
         Mat binary_mask_3ch;
