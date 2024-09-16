@@ -34,6 +34,13 @@ int main() {
         return -1;
     }
 
+    // Load a new background image
+    Mat background = imread("background_image.jpg");
+    if (background.empty()) {
+        std::cerr << "Error: Could not load background image." << std::endl;
+        return -1;
+    }
+
     while (true) {
         Mat frame;
         cap >> frame;
@@ -42,6 +49,7 @@ int main() {
             break;
         }
 
+        resize(background, background, frame.size());
         Mat resized_frame;
         resize(frame, resized_frame, Size(256, 144));
 
@@ -62,10 +70,38 @@ int main() {
 
         Mat segmentation_mask_resized;
         resize(segmentation_mask, segmentation_mask_resized, frame.size());
-        
+
+        // Threshold mask to create binary mask
+        Mat binary_mask;
+        threshold(segmentation_mask_resized, binary_mask, 0.5, 1, THRESH_BINARY);
+
+        // Convert mask to 3 channels and the same type as the frame
+        Mat binary_mask_3ch;
+        Mat mask_channels[] = { binary_mask, binary_mask, binary_mask };
+        merge(mask_channels, 3, binary_mask_3ch);
+        binary_mask_3ch.convertTo(binary_mask_3ch, CV_32FC3);
+
+        // Convert frame and background to float
+        Mat frame_float, background_float;
+        frame.convertTo(frame_float, CV_32FC3, 1.0 / 255.0);
+        background.convertTo(background_float, CV_32FC3, 1.0 / 255.0);
+
+        // Replace background using the mask
+        Mat foreground, background_overlay;
+        multiply(frame_float, binary_mask_3ch, foreground);
+        multiply(background_float, Scalar(1, 1, 1) - binary_mask_3ch, background_overlay);
+
+        // Combine foreground and background
+        Mat output;
+        add(foreground, background_overlay, output);
+
+        // Convert the output to 8-bit for display
+        output.convertTo(output, CV_8UC3, 255.0);
+
+        // Display the results
         imshow("Webcam Frame", frame);
-        imshow("Segmentation Mask", segmentation_mask_resized);
-        
+        imshow("Background Replaced", output);
+
         // Exit on 'q' key press
         if (waitKey(1) == 'q') {
             break;
