@@ -11,6 +11,8 @@ using namespace tflite;
 
 int main() {
     VideoCapture cap(0);
+    std::unique_ptr<tflite::Interpreter> interpreter;
+
     if (!cap.isOpened()) {
         std::cerr << "Error: Could not open the webcam." << std::endl;
         return -1;
@@ -23,7 +25,6 @@ int main() {
     }
 
     tflite::ops::builtin::BuiltinOpResolver resolver;
-    std::unique_ptr<tflite::Interpreter> interpreter;
     tflite::InterpreterBuilder(*model, resolver)(&interpreter);
     if (!interpreter) {
         std::cerr << "Failed to create interpreter." << std::endl;
@@ -55,9 +56,10 @@ int main() {
         }
 
         resize(background, background, frame.size());
+        
+        // input size (256x144 for selfie segmentation landscape)
         Mat resized_frame;
         resize(frame, resized_frame, Size(256, 144));
-
         resized_frame.convertTo(resized_frame, CV_32FC3, 1.0 / 255.0);
 
         // Input dimensions (float32[1,144,256,3])
@@ -95,21 +97,25 @@ int main() {
         Mat binary_mask;
         threshold(avg_mask, binary_mask, threshold_value, 1, THRESH_BINARY);
 
+        // Apply Gaussian blur to smooth the edges of the mask
+        Mat smooth_mask;
+        GaussianBlur(binary_mask, smooth_mask, Size(15, 15), 0);  // Adjust kernel size for more or less smoothing
+
         // Convert mask to 3 channels and the same type as the frame
-        Mat binary_mask_3ch;
-        Mat mask_channels[] = { binary_mask, binary_mask, binary_mask };
-        merge(mask_channels, 3, binary_mask_3ch);
-        binary_mask_3ch.convertTo(binary_mask_3ch, CV_32FC3);
+        Mat smooth_mask_3ch;
+        Mat mask_channels[] = { smooth_mask, smooth_mask, smooth_mask };
+        merge(mask_channels, 3, smooth_mask_3ch);
+        smooth_mask_3ch.convertTo(smooth_mask_3ch, CV_32FC3);
 
         // Convert frame and background to float
         Mat frame_float, background_float;
         frame.convertTo(frame_float, CV_32FC3, 1.0 / 255.0);
         background.convertTo(background_float, CV_32FC3, 1.0 / 255.0);
 
-        // Replace background using the mask
+        // Replace background using the smoothed mask
         Mat foreground, background_overlay;
-        multiply(frame_float, binary_mask_3ch, foreground);
-        multiply(background_float, Scalar(1, 1, 1) - binary_mask_3ch, background_overlay);
+        multiply(frame_float, smooth_mask_3ch, foreground);
+        multiply(background_float, Scalar(1, 1, 1) - smooth_mask_3ch, background_overlay);
 
         // Combine foreground and background
         Mat output;
