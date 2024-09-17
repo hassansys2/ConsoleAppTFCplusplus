@@ -42,8 +42,9 @@ int main() {
         return -1;
     }
 
-    const int n = 10;  // Number of previous masks to average
-    std::deque<Mat> mask_buffer; // Buffer to store previous masks
+    int n = 5;              // Number of previous masks to average
+    float threshold_value = 0.5;  // Initial threshold value
+    std::deque<Mat> mask_buffer;  // Buffer to store previous masks
 
     while (true) {
         Mat frame;
@@ -92,7 +93,7 @@ int main() {
 
         // Threshold the averaged mask to create a binary mask
         Mat binary_mask;
-        threshold(avg_mask, binary_mask, 0.5, 1, THRESH_BINARY);
+        threshold(avg_mask, binary_mask, threshold_value, 1, THRESH_BINARY);
 
         // Convert mask to 3 channels and the same type as the frame
         Mat binary_mask_3ch;
@@ -121,9 +122,26 @@ int main() {
         imshow("Webcam Frame", frame);
         imshow("Background Replaced", output);
 
-        // Exit on 'q' key press
-        if (waitKey(1) == 'q') {
+        // Handle key inputs
+        char key = waitKey(1);
+        if (key == 'q') {
             break;
+        }
+        else if (key == '+') {
+            n = std::min(n + 1, 20);  // Increase `n`, cap at 20
+            std::cout << "Increased number of masks to average: " << n << std::endl;
+        }
+        else if (key == '-') {
+            n = std::max(n - 1, 1);  // Decrease `n`, minimum is 1
+            std::cout << "Decreased number of masks to average: " << n << std::endl;
+        }
+        else if (key == 'u') {
+            threshold_value = std::min(threshold_value + 0.05f, 1.0f);  // Increase threshold, cap at 1.0
+            std::cout << "Increased threshold value: " << threshold_value << std::endl;
+        }
+        else if (key == 'd') {
+            threshold_value = std::max(threshold_value - 0.05f, 0.0f);  // Decrease threshold, minimum is 0.0
+            std::cout << "Decreased threshold value: " << threshold_value << std::endl;
         }
     }
 
