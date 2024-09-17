@@ -4,6 +4,7 @@
 #include <tensorflow/lite/model.h>
 #include <tensorflow/lite/optional_debug_tools.h>
 #include <tensorflow/lite/stderr_reporter.h>
+#include <deque>
 
 using namespace cv;
 using namespace tflite;
@@ -41,8 +42,8 @@ int main() {
         return -1;
     }
 
-    Mat prev_mask;  // Store the previous mask for temporal smoothing
-    double alpha = 0.5; // Smoothing factor (0 < alpha < 1)
+    const int n = 10;  // Number of previous masks to average
+    std::deque<Mat> mask_buffer; // Buffer to store previous masks
 
     while (true) {
         Mat frame;
@@ -74,19 +75,24 @@ int main() {
         Mat segmentation_mask_resized;
         resize(segmentation_mask, segmentation_mask_resized, frame.size());
 
-        // Apply temporal smoothing
-        if (prev_mask.empty()) {
-            // For the first frame, initialize the previous mask
-            segmentation_mask_resized.copyTo(prev_mask);
-        }
-        else {
-            // Smooth the mask using an exponential moving average
-            addWeighted(segmentation_mask_resized, alpha, prev_mask, 1 - alpha, 0, prev_mask);
+        // Add the current mask to the buffer
+        mask_buffer.push_back(segmentation_mask_resized);
+
+        // Ensure the buffer does not exceed the size `n`
+        if (mask_buffer.size() > n) {
+            mask_buffer.pop_front();
         }
 
-        // Threshold the smoothed mask to create a binary mask
+        // Calculate the average mask
+        Mat avg_mask = Mat::zeros(segmentation_mask_resized.size(), CV_32FC1);
+        for (const Mat& m : mask_buffer) {
+            avg_mask += m;
+        }
+        avg_mask /= static_cast<float>(mask_buffer.size());
+
+        // Threshold the averaged mask to create a binary mask
         Mat binary_mask;
-        threshold(prev_mask, binary_mask, 0.5, 1, THRESH_BINARY);
+        threshold(avg_mask, binary_mask, 0.5, 1, THRESH_BINARY);
 
         // Convert mask to 3 channels and the same type as the frame
         Mat binary_mask_3ch;
