@@ -41,6 +41,9 @@ int main() {
         return -1;
     }
 
+    Mat prev_mask;  // Store the previous mask for temporal smoothing
+    double alpha = 0.5; // Smoothing factor (0 < alpha < 1)
+
     while (true) {
         Mat frame;
         cap >> frame;
@@ -71,17 +74,19 @@ int main() {
         Mat segmentation_mask_resized;
         resize(segmentation_mask, segmentation_mask_resized, frame.size());
 
-        // Apply Gaussian blur to smooth the edges of the mask
-        GaussianBlur(segmentation_mask_resized, segmentation_mask_resized, Size(7, 7), 0);
+        // Apply temporal smoothing
+        if (prev_mask.empty()) {
+            // For the first frame, initialize the previous mask
+            segmentation_mask_resized.copyTo(prev_mask);
+        }
+        else {
+            // Smooth the mask using an exponential moving average
+            addWeighted(segmentation_mask_resized, alpha, prev_mask, 1 - alpha, 0, prev_mask);
+        }
 
-        // Threshold mask to create binary mask
+        // Threshold the smoothed mask to create a binary mask
         Mat binary_mask;
-        threshold(segmentation_mask_resized, binary_mask, 0.5, 1, THRESH_BINARY);
-
-        // Apply morphological operations to remove noise
-        Mat morph_kernel = getStructuringElement(MORPH_ELLIPSE, Size(5, 5));
-        dilate(binary_mask, binary_mask, morph_kernel);
-        erode(binary_mask, binary_mask, morph_kernel);
+        threshold(prev_mask, binary_mask, 0.5, 1, THRESH_BINARY);
 
         // Convert mask to 3 channels and the same type as the frame
         Mat binary_mask_3ch;
